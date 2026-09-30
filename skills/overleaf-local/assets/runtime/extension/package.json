@@ -1,0 +1,32 @@
+{
+  "name": "overleaf-local-__PROJECT__",
+  "displayName": "Overleaf Local (__PROJECT__)",
+  "description": "Protected Overleaf synchronization for the configured manuscript.",
+  "publisher": "paper-local",
+  "version": "0.1.6",
+  "engines": {"vscode": "^1.90.0"},
+  "main": "./extension.js",
+  "extensionKind": ["workspace"],
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      {"command": "overleafLocal__PROJECT__.check", "title": "Paper: Check Sync"},
+      {"command": "overleafLocal__PROJECT__.sync", "title": "Paper: Sync Now", "icon": "$(sync)"},
+      {"command": "overleafLocal__PROJECT__.saveSync", "title": "Paper: 保存并同步 Overleaf", "icon": "$(cloud-upload)"},
+      {"command": "overleafLocal__PROJECT__.menu", "title": "Paper: 同步管理", "icon": "$(gear)"},
+      {"command": "overleafLocal__PROJECT__.pause", "title": "Paper: Pause Sync"},
+      {"command": "overleafLocal__PROJECT__.resume", "title": "Paper: Resume Sync"},
+      {"command": "overleafLocal__PROJECT__.resolve", "title": "Paper: Inspect Conflict"},
+      {"command": "overleafLocal__PROJECT__.conflictActions", "title": "Paper: 冲突：选择本地 / Overleaf", "icon": "$(git-merge)"},
+      {"command": "overleafLocal__PROJECT__.refreshConflict", "title": "Paper: 重新拉取 Overleaf 冲突版本"},
+      {"command": "overleafLocal__PROJECT__.continueResolution", "title": "Paper: 继续解决并提交冲突"},
+      {"command": "overleafLocal__PROJECT__.acceptResolution", "title": "Paper: Accept Reviewed Conflict Resolution"}
+    ],
+    "menus": {
+      "editor/title": [
+        {"command": "overleafLocal__PROJECT__.saveSync", "when": "overleafLocal__PROJECT__.active", "group": "navigation@20"},
+        {"command": "overleafLocal__PROJECT__.menu", "when": "overleafLocal__PROJECT__.active", "group": "navigation@21"}
+      ]
+    }
+  }
+}

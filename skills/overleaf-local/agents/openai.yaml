@@ -1,0 +1,4 @@
+interface:
+  display_name: "Overleaf Local"
+  short_description: "Protected Overleaf–local sync, conflict UI, and Codex guards"
+  default_prompt: "Use $overleaf-local to establish and verify protected two-way synchronization for this paper, preserving its sources and existing configuration."
