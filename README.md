@@ -35,3 +35,7 @@ The tested runtime targets Linux/POSIX with Git, Python 3.10+, `screen`, and VS 
 extension host. Overleaf Git access and local credential configuration are required. Credentials,
 paper contents, generated deployments, runtime sockets, and synchronization logs do not belong in
 this repository.
+
+The release was packaged and isolation-tested on 2026-09-30 with Codex CLI `0.153.0` and the OpenAI
+VS Code extension `26.901.22334`; every new project still requires its own authenticated Overleaf
+round trip and real-editor acceptance.
