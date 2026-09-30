@@ -17,8 +17,9 @@ if not args.session_id:
 home = Path(__file__).resolve().parent
 config = json.loads((home / 'config.json').read_text())
 wake_root = Path(config['codex_wake'])
+watch_name = 'paper-' + config['id'] + '-q-' + args.session_id[:8]
 command = [str(wake_root / 'scripts/start_watch.sh'), 'start',
-           '--name', 'paper-' + config['id'] + '-quiet-' + args.session_id, '--session-id', args.session_id,
+           '--name', watch_name, '--session-id', args.session_id,
            '--probe-key', 'overleaf-synchronized-quiet-status',
            '--probe-command', shlex.join([config['python'], str(home / 'quiet_probe.py')]),
            '--match', '^PAPER_QUIET_READY$', '--probe-timeout', '12', '--prompt', args.prompt]
