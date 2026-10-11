@@ -14,7 +14,7 @@ parser.add_argument('--dry-run', action='store_true')
 args = parser.parse_args()
 if not args.session_id:
     parser.error('A root Codex thread ID is required')
-home = Path(__file__).resolve().parent
+home = Path(os.environ.get('OVERLEAF_LOCAL_HOME', Path(__file__).resolve().parent))
 config = json.loads((home / 'config.json').read_text())
 wake_root = Path(config['codex_wake'])
 watch_name = 'paper-' + config['id'] + '-q-' + args.session_id[:8]

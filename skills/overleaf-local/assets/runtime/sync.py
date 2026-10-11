@@ -13,7 +13,7 @@ import tempfile
 import threading
 import time
 
-HOME = Path(__file__).resolve().parent
+HOME = Path(os.environ.get("OVERLEAF_LOCAL_HOME", Path(__file__).resolve().parent))
 
 
 def rpc(path, payload, timeout=90):
@@ -41,7 +41,7 @@ class Synchronizer:
         self.remote = config["remote"]
         self.branch = config["branch"]
         self.remote_ref = f"refs/remotes/{self.remote}/{self.branch}"
-        self.pause_file = self.repo / ".git/overleaf-local-paused"
+        self.pause_file = self.repo / ".git" / config.get("pause_name", "overleaf-local-paused")
         self.lock = threading.Lock()
         self.last_fetch = 0
         self.remote_head = None
@@ -138,7 +138,10 @@ class Synchronizer:
                 return {"ready": False, "message": str(error)}
 
     def dirty(self):
-        return bool(self.git("status", "--porcelain", "--untracked-files=no").stdout)
+        if self.git("status", "--porcelain", "--untracked-files=no").stdout:
+            return True
+        tracked = set(self.git("ls-files", "-z").stdout.decode().split("\0"))
+        return any((self.repo / name).exists() for name in self.allowed - tracked)
 
     def divergence(self):
         return [int(x) for x in self.text("rev-list", "--left-right", "--count", f"HEAD...{self.remote_ref}").split()]
@@ -153,6 +156,8 @@ class Synchronizer:
                 editors = self.clean_editors(required=pre_edit)
                 if self.pause_file.exists():
                     raise Paused("Synchronization paused; resume or resolve the conflict first")
+                if any(content is None for content in self.snapshot().values()):
+                    raise Paused("A required manuscript file is missing; review deletion before syncing")
                 if ahead or behind or dirty:
                     return self.report("pending", "Synchronize and reread the paper before editing",
                                        ahead=ahead, behind=behind, local_changes=dirty, allowed=False)
@@ -184,7 +189,8 @@ class Synchronizer:
                 if any(content is None for content in before.values()):
                     raise Paused("A required manuscript file is missing; review deletion before syncing")
                 if self.dirty():
-                    self.git("add", "-u", "--", *sorted(self.allowed))
+                    # The explicit allowlist is approval to track these files, even if ignored.
+                    self.git("add", "-f", "--", *sorted(self.allowed))
                     self.git("commit", "--quiet", "-m", "Local manuscript edits")
                 if self.snapshot() != before:
                     raise Paused("Files changed during commit; retry after saving finishes")
@@ -254,6 +260,34 @@ class Synchronizer:
                 return self.report("error", str(error))
 
     def handle(self, request):
+        if request.get("op") == "import-asset":
+            with self.lock:
+                if not self.pause_file.exists() or self.pause_file.read_text().strip() != "manual":
+                    return self.report("error", "Pause synchronization before importing a new figure")
+                source = Path(request.get("source", ""))
+                name = request.get("destination", "")
+                destination = self.repo / name
+                signatures = {".pdf": b"%PDF-", ".png": b"\x89PNG\r\n\x1a\n",
+                              ".jpg": b"\xff\xd8\xff", ".jpeg": b"\xff\xd8\xff"}
+                if (name not in self.allowed or not name.startswith("figures/") or
+                        destination.suffix.lower() not in signatures or destination.is_symlink() or
+                        not destination.resolve().is_relative_to(self.repo.resolve())):
+                    return self.report("error", "Only allowlisted PDF, PNG, and JPEG figures can be imported")
+                content = source.read_bytes()
+                if not content.startswith(signatures[destination.suffix.lower()]):
+                    return self.report("error", "The figure content does not match its destination format")
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                if destination.exists():
+                    if destination.read_bytes() != content:
+                        expected = request.get("expected_current", "")
+                        if not expected or destination.read_bytes() != Path(expected).read_bytes():
+                            return self.report("error", "Existing figure differs; provide its reviewed current copy to replace it")
+                        destination.write_bytes(content)
+                else:
+                    with destination.open("xb") as output:
+                        output.write(content)
+                self.git("add", "-f", "--", name)
+                return self.report("paused", "Figure imported and staged; synchronization remains paused", asset=name)
         operation = request.get("op")
         if operation == "quiet":
             return self.quiet()
@@ -327,7 +361,7 @@ class Synchronizer:
                     contents = self.snapshot()
                     if any(content is None or b'<<<<<<< ' in content or b'>>>>>>> ' in content for content in contents.values()):
                         raise Paused("Missing files or conflict markers remain")
-                    self.git("add", "-u", "--", *sorted(self.allowed))
+                    self.git("add", "-f", "--", *sorted(self.allowed))
                     parent = self.text("rev-parse", "HEAD")
                     tree = self.text("write-tree")
                     merged = self.text("commit-tree", tree, "-p", parent, "-p", conflict["remote"],
@@ -405,7 +439,10 @@ def serve(config):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("operation", choices=["serve", "status", "check", "sync", "pre-edit", "pause", "resume", "resolve", "quiet", "inspect-conflict"])
+    parser.add_argument("operation", choices=["serve", "status", "check", "sync", "pre-edit", "pause", "resume", "resolve", "quiet", "inspect-conflict", "import-asset"])
+    parser.add_argument("--source", type=Path, help="PDF, PNG, or JPEG source for an allowlisted figure")
+    parser.add_argument("--destination", help="Allowlisted figure path relative to the paper repository")
+    parser.add_argument("--expected-current", type=Path, help="Reviewed current file required when replacing a figure")
     parser.add_argument("--accept-current-resolution", action="store_true")
     parser.add_argument("--refresh", action="store_true", help="Fetch the latest remote conflict snapshot")
     parser.add_argument("--config", type=Path, default=HOME / "config.json")
@@ -416,7 +453,9 @@ def main():
     else:
         try:
             response = rpc(Path(config["runtime"]) / "service.sock", {"op": args.operation,
-                           "accept_current_resolution": args.accept_current_resolution, "refresh": args.refresh})
+                           "accept_current_resolution": args.accept_current_resolution, "refresh": args.refresh,
+                           "source": str(args.source) if args.source else "", "destination": args.destination or "",
+                           "expected_current": str(args.expected_current) if args.expected_current else ""})
         except (OSError, RuntimeError) as error:
             response = {"state": "offline", "message": "Sync service unavailable", "allowed": False}
         print(json.dumps(response, ensure_ascii=False, indent=2))

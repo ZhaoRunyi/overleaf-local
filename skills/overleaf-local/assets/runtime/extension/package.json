@@ -3,7 +3,7 @@
   "displayName": "Overleaf Local (__PROJECT__)",
   "description": "Protected Overleaf synchronization for the configured manuscript.",
   "publisher": "paper-local",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "engines": {"vscode": "^1.90.0"},
   "main": "./extension.js",
   "extensionKind": ["workspace"],

@@ -1,11 +1,14 @@
 """Package the dependency-free local extension as a VSIX for normal installation."""
 import json
+import os
 from pathlib import Path
 import zipfile
 
-source = Path(__file__).resolve().parent / "extension"
+home = Path(os.environ.get("OVERLEAF_LOCAL_HOME", Path(__file__).resolve().parent))
+source = home / "extension"
 manifest = json.loads((source / "package.json").read_text())
-output = Path("/tmp/overleaf-local-__PROJECT__.vsix")
+config = json.loads((home / "config.json").read_text())
+output = Path("/tmp") / ("overleaf-local-" + config["id"] + ".vsix")
 vsix = f'''<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
 <Metadata><Identity Language="en-US" Id="{manifest['name']}" Version="{manifest['version']}" Publisher="{manifest['publisher']}"/>

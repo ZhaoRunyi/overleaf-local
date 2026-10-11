@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import sys
 import time
 
@@ -13,6 +14,67 @@ config = json.loads((HOME / 'config.json').read_text())
 repo = Path(config['repo'])
 allowed = {repo / name for name in config['files']}
 runtime = Path(config['runtime'])
+
+
+def artifact_review_command(command):
+    """Allow source reads and new /tmp artifacts, never paper writes."""
+    if re.search(r'[\n\r;&|<>`$(){}*?\[\]~]', command):
+        return False
+    try:
+        args = shlex.split(command)
+        if not args:
+            return False
+        executable = Path(args[0])
+        name = executable.name
+        if str(executable) not in (name, '/usr/bin/' + name):
+            return False
+        if name == 'cp':
+            if len(args) != 5 or args[1:3] != ['-n', '--']:
+                return False
+            source, destination = map(Path, args[3:])
+            return (source.is_absolute() and source.resolve() in allowed
+                    and source.resolve().is_relative_to(repo / 'figures')
+                    and source.suffix.lower() in ('.pdf', '.png', '.jpg', '.jpeg')
+                    and source.is_file() and not source.is_symlink()
+                    and destination.is_absolute() and not destination.exists()
+                    and not destination.is_symlink()
+                    and not destination.resolve().is_relative_to(repo)
+                    and destination.parent.resolve().is_relative_to(Path('/tmp')))
+        if name not in ('pdfinfo', 'pdftotext', 'pdftoppm'):
+            return False
+        index = 1
+        while index < len(args) and args[index].startswith('-'):
+            flag = args[index]
+            if name == 'pdftotext' and flag in ('-layout', '-raw'):
+                index += 1
+            elif name == 'pdftoppm' and flag in ('-png', '-singlefile'):
+                index += 1
+            elif flag in ('-f', '-l') or (name == 'pdftoppm' and flag == '-r'):
+                if index + 1 >= len(args) or not args[index + 1].isdigit():
+                    return False
+                index += 2
+            else:
+                return False
+        operands = args[index:]
+        if len(operands) != (1 if name == 'pdfinfo' else 2):
+            return False
+        source = Path(operands[0])
+        if (not source.is_absolute() or not source.is_file()
+                or source.suffix.lower() != '.pdf'
+                or source.resolve() not in allowed | {repo / 'build/main.pdf'}):
+            return False
+        if name == 'pdfinfo':
+            return True
+        destination = Path(operands[1])
+        if (not destination.is_absolute() or destination.is_symlink()
+                or destination.resolve().is_relative_to(repo)
+                or not destination.parent.is_dir()
+                or not destination.parent.resolve().is_relative_to(Path('/tmp'))):
+            return False
+        # Fresh outputs also exclude existing symlinks and hard links.
+        return not any(destination.parent.glob(destination.name + '*'))
+    except (ValueError, OSError):
+        return False
 
 
 def changed_source(event, reason):
@@ -42,7 +104,7 @@ def decide(event):
         command = payload.get('command', payload.get('cmd', payload.get('input', '')))
     if not isinstance(command, str):
         return None
-    cwd = Path(event.get('cwd') or str(repo))
+    cwd = Path(event.get('cwd') or os.getcwd())
     patch = tool in ('apply_patch', 'Edit', 'Write')
     touched = []
     if patch:
@@ -63,10 +125,14 @@ def decide(event):
         return None
     with (runtime / 'hook-audit.jsonl').open('a') as audit:
         audit.write(json.dumps({'time': time.time(), 'event': event.get('hook_event_name'),
-                                'tool': tool, 'session': event.get('session_id')}) + '\n')
+                                'tool': tool, 'session': event.get('session_id'),
+                                'deployment': str(HOME)}) + '\n')
     event_name = event.get('hook_event_name')
     session = re.sub(r'[^A-Za-z0-9_-]', '_', event.get('session_id', 'unknown'))
     marker = runtime / ('codex-read-' + session + '.json')
+    if tool in ('Bash', 'exec_command') and artifact_review_command(command):
+        # Reviewing a PDF or a binary is not a reread of the manuscript source.
+        return None
     read_only = tool in ('Bash', 'exec_command') and bool(re.search(r'\b(cat|sed|rg|head|tail|git diff|git show)\b', command))
     suspicious = bool(re.search(r'(?:\b(python\d*|perl|ruby|node|tee|cp|mv|rm|apply_patch)\b|sed\s+-[^\s]*i|(?<![<>])[>](?![>]))', command))
     if event_name == 'PostToolUse':

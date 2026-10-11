@@ -4,8 +4,9 @@ const path = require('path');
 const net = require('net');
 const {spawn} = require('child_process');
 const {registerConflicts} = require('./conflicts');
-const home = require('./deployment.json').home;
+function createExtension(home) {
 const config = JSON.parse(fs.readFileSync(path.join(home, 'config.json'), 'utf8'));
+const namespace = config.command_namespace || 'overleafLocal' + config.id;
 const allowed = new Set(config.files.map(name => path.join(config.repo, name)));
 const binaryExtensions = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.eps', '.zip']);
 
@@ -136,21 +137,21 @@ function activate(context) {
   const socketPath = path.join(config.runtime, `editor-${process.pid}.sock`);
   if (fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 10);
-  statusBar.command = 'overleafLocal__PROJECT__.menu';
+  statusBar.command = namespace + '.menu';
   statusBar.text = '$(sync) Paper: starting';
   statusBar.show();
   const syncButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 11);
   syncButton.text = '$(cloud-upload) 保存并同步';
   syncButton.tooltip = '保存本窗口的论文修改，并与 Overleaf 双向同步';
-  syncButton.command = 'overleafLocal__PROJECT__.saveSync';
+  syncButton.command = namespace + '.saveSync';
   syncButton.show();
   const conflictButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 13);
   conflictButton.text = '$(git-merge) 冲突：选择本地 / Overleaf';
-  conflictButton.command = 'overleafLocal__PROJECT__.conflictActions';
+  conflictButton.command = namespace + '.conflictActions';
   const submitButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 12);
   submitButton.text = '$(check-all) 提交合并结果';
-  submitButton.command = 'overleafLocal__PROJECT__.acceptResolution';
-  const updateContext = editor => vscode.commands.executeCommand('setContext', 'overleafLocal__PROJECT__.active',
+  submitButton.command = namespace + '.acceptResolution';
+  const updateContext = editor => vscode.commands.executeCommand('setContext', namespace + '.active',
     Boolean(editor && allowed.has(editor.document.uri.fsPath)));
   updateContext(vscode.window.activeTextEditor);
   context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(updateContext));
@@ -169,7 +170,7 @@ function activate(context) {
       try {
         const input = JSON.parse(line);
         if (input.op === 'status') {
-          connection.end(JSON.stringify({repo: config.repo, dirty: dirtyDocuments(), busy,
+          connection.end(JSON.stringify({repo: config.repo, deployment: home, dirty: dirtyDocuments(), busy,
             focused: vscode.window.state.focused, validate_updates: true}) + '\n');
           return;
         }
@@ -192,13 +193,13 @@ function activate(context) {
   server.on('error', error => output.appendLine(error.message));
   const start = spawn('/bin/bash', [path.join(home, 'start.sh')], {stdio: 'ignore', detached: true});
   start.unref();
-  context.subscriptions.push(vscode.commands.registerCommand('overleafLocal__PROJECT__.saveSync', async () => {
+  context.subscriptions.push(vscode.commands.registerCommand(namespace + '.saveSync', async () => {
     try {
       let conflict = false;
-      try { conflict = JSON.parse(fs.readFileSync(path.join(config.repo, '.git/overleaf-local-paused'), 'utf8')).reason === 'conflict'; }
+      try { conflict = JSON.parse(fs.readFileSync(path.join(config.repo, '.git', config.pause_name || 'overleaf-local-paused'), 'utf8')).reason === 'conflict'; }
       catch (error) { /* No recorded merge conflict. */ }
       if (conflict) {
-        await vscode.commands.executeCommand('overleafLocal__PROJECT__.continueResolution');
+        await vscode.commands.executeCommand(namespace + '.continueResolution');
         return;
       }
       for (const document of vscode.workspace.textDocuments) {
@@ -206,10 +207,10 @@ function activate(context) {
           throw new Error('文件未能保存，已停止同步；请先处理编辑器中的保存冲突。');
         }
       }
-      await vscode.commands.executeCommand('overleafLocal__PROJECT__.sync');
+      await vscode.commands.executeCommand(namespace + '.sync');
     } catch (error) { vscode.window.showErrorMessage(`Paper Sync: ${error.message}`); }
   }));
-  context.subscriptions.push(vscode.commands.registerCommand('overleafLocal__PROJECT__.menu', async () => {
+  context.subscriptions.push(vscode.commands.registerCommand(namespace + '.menu', async () => {
     const items = [
       {label:'$(cloud-upload) 保存并同步', command:'saveSync'},
       {label:'$(sync) 立即同步已保存的内容', command:'sync'},
@@ -221,20 +222,20 @@ function activate(context) {
       {label:'$(check-all) 提交合并结果', command:'acceptResolution'}
     ];
     const choice = await vscode.window.showQuickPick(items, {placeHolder:'论文 ↔ Overleaf'});
-    if (choice) await vscode.commands.executeCommand('overleafLocal__PROJECT__.' + choice.command);
+    if (choice) await vscode.commands.executeCommand(namespace + '.' + choice.command);
   }));
   for (const operation of ['check', 'sync', 'pause', 'resume']) {
-    context.subscriptions.push(vscode.commands.registerCommand(`overleafLocal__PROJECT__.${operation}`, async () => {
+    context.subscriptions.push(vscode.commands.registerCommand(`${namespace}.${operation}`, async () => {
       try {
         const result = await request({op: operation});
         output.appendLine(JSON.stringify(result, null, 2));
         if (result.state === 'synced') vscode.window.showInformationMessage('Paper Sync：本地与 Overleaf 已同步。');
         else if (result.state === 'conflict') {
-          await vscode.commands.executeCommand('overleafLocal__PROJECT__.continueResolution');
+          await vscode.commands.executeCommand(namespace + '.continueResolution');
         }
         else if (result.state === 'error') vscode.window.showErrorMessage(`Paper Sync: ${result.message}`);
         else vscode.window.showWarningMessage(`Paper Sync: ${result.message}`, '同步管理').then(choice => {
-          if (choice) vscode.commands.executeCommand('overleafLocal__PROJECT__.menu');
+          if (choice) vscode.commands.executeCommand(namespace + '.menu');
         });
       } catch (error) { vscode.window.showErrorMessage(`Paper Sync: ${error.message}`); }
     }));
@@ -245,7 +246,7 @@ function activate(context) {
       const state = await request({op: 'status'});
       // A failed submit may temporarily report waiting; the pause record still owns the conflict.
       let conflict = false;
-      try { conflict = JSON.parse(fs.readFileSync(path.join(config.repo, '.git/overleaf-local-paused'), 'utf8')).reason === 'conflict'; }
+      try { conflict = JSON.parse(fs.readFileSync(path.join(config.repo, '.git', config.pause_name || 'overleaf-local-paused'), 'utf8')).reason === 'conflict'; }
       catch (error) { /* No recorded merge conflict. */ }
       for (const button of [conflictButton, submitButton]) {
         if (conflict) button.show();
@@ -260,7 +261,7 @@ function activate(context) {
           dirtyNotified = true;
           vscode.window.showWarningMessage('Paper Sync 等待保存：某个窗口有未保存的论文修改，自动同步暂缓。', '保存并同步', '打开未保存文件').then(choice => {
             const filename = dirtyDocuments()[0];
-            if (choice === '保存并同步') vscode.commands.executeCommand('overleafLocal__PROJECT__.saveSync');
+            if (choice === '保存并同步') vscode.commands.executeCommand(namespace + '.saveSync');
             else if (choice && filename) vscode.window.showTextDocument(vscode.Uri.file(filename));
           });
         }
@@ -271,10 +272,10 @@ function activate(context) {
       if (state.state !== lastState) {
         output.appendLine(`${new Date().toISOString()} ${state.state}: ${state.message}`);
         if (state.state === 'conflict') vscode.window.showWarningMessage('Paper Sync：两侧修改冲突，同步已暂停。', '查看冲突').then(choice => {
-          if (choice) vscode.commands.executeCommand('overleafLocal__PROJECT__.resolve');
+          if (choice) vscode.commands.executeCommand(namespace + '.resolve');
         });
         if (state.state === 'error' || state.state === 'retry') vscode.window.showWarningMessage(`Paper Sync 暂未完成：${state.message}`, '同步管理').then(choice => {
-          if (choice) vscode.commands.executeCommand('overleafLocal__PROJECT__.menu');
+          if (choice) vscode.commands.executeCommand(namespace + '.menu');
         });
         lastState = state.state;
       }
@@ -287,4 +288,7 @@ function activate(context) {
   }});
 }
 
-module.exports = {activate, applyChanges, checkUpdate};
+return {activate, applyChanges, checkUpdate};
+}
+
+module.exports = {createExtension};

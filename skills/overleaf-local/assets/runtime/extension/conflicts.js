@@ -15,10 +15,12 @@ function git(config, args, allowConflicts = false) {
 }
 
 function registerConflicts(vscode, context, config, request, output) {
+  const namespace = config.command_namespace || 'overleafLocal' + config.id;
+  const snapshotScheme = config.snapshot_scheme || 'ol-' + config.id + '-snapshot';
   let session = context.workspaceState.get('paperMergeSession');
-  const snapshot = filename => vscode.Uri.from({scheme: 'ol-__PROJECT__-snapshot',
+  const snapshot = filename => vscode.Uri.from({scheme: snapshotScheme,
     path: filename, query: ''});
-  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider('ol-__PROJECT__-snapshot', {
+  context.subscriptions.push(vscode.workspace.registerTextDocumentContentProvider(snapshotScheme, {
     provideTextDocumentContent(uri) {
       if (!/^\/tmp\/overleaf-local-merge-[^/]+\/(base|local|remote)-\d+\.tex$/.test(uri.path)) {
         throw new Error('Invalid conflict snapshot');
@@ -78,12 +80,12 @@ function registerConflicts(vscode, context, config, request, output) {
     vscode.window.showInformationMessage(
       '逐处点击“接受 Overleaf”或“接受 本地”，检查下方结果并完成合并。最后点击底栏“提交合并结果”；草稿不会自动上传。',
       '整份文件选择版本').then(choice => {
-        if (choice) vscode.commands.executeCommand('overleafLocal__PROJECT__.conflictActions');
+        if (choice) vscode.commands.executeCommand(namespace + '.conflictActions');
       });
   }
 
   function register(name, callback) {
-    context.subscriptions.push(vscode.commands.registerCommand('overleafLocal__PROJECT__.' + name, async () => {
+    context.subscriptions.push(vscode.commands.registerCommand(namespace + '.' + name, async () => {
       try { await callback(); }
       catch (error) { vscode.window.showErrorMessage(`Paper Sync: ${error.message}`); }
     }));
@@ -103,19 +105,19 @@ function registerConflicts(vscode, context, config, request, output) {
     vscode.window.showInformationMessage(
       '合并结果已保存，但尚未上传。下一步点击“提交并同步”；也可以回到论文点击“保存并同步”。',
       '提交并同步').then(choice => {
-        if (choice) vscode.commands.executeCommand('overleafLocal__PROJECT__.acceptResolution');
+        if (choice) vscode.commands.executeCommand(namespace + '.acceptResolution');
       });
   }));
 
   register('continueResolution', async () => {
     if (draftReady()) {
-      await vscode.commands.executeCommand('overleafLocal__PROJECT__.acceptResolution');
+      await vscode.commands.executeCommand(namespace + '.acceptResolution');
       return;
     }
     const choice = await vscode.window.showWarningMessage(
       '冲突还未完成提交。请逐处选择本地或 Overleaf，完成合并并保存；之后再点“保存并同步”即可提交。',
       '继续处理冲突');
-    if (choice) await vscode.commands.executeCommand('overleafLocal__PROJECT__.resolve');
+    if (choice) await vscode.commands.executeCommand(namespace + '.resolve');
   });
 
   register('resolve', async () => {
@@ -148,8 +150,8 @@ function registerConflicts(vscode, context, config, request, output) {
       {label: '重新拉取 Overleaf 版本', command: 'refreshConflict'}
     ], {placeHolder: '逐处选择只处理冲突；整份采用会舍弃该文件另一侧的修改'});
     if (!action) return;
-    if (action.command) return vscode.commands.executeCommand('overleafLocal__PROJECT__.' + action.command);
-    if (!session) await vscode.commands.executeCommand('overleafLocal__PROJECT__.resolve');
+    if (action.command) return vscode.commands.executeCommand(namespace + '.' + action.command);
+    if (!session) await vscode.commands.executeCommand(namespace + '.resolve');
     const file = await chooseFile();
     if (!file) return;
     const draft = await prepare(file);
@@ -174,7 +176,7 @@ function registerConflicts(vscode, context, config, request, output) {
     const result = await vscode.window.withProgress({location: vscode.ProgressLocation.Notification,
       title: '正在获取 Overleaf 最新版本…'}, () => request({op: 'inspect-conflict', refresh: true}));
     if (result.state !== 'conflict') throw new Error(result.message);
-    await vscode.commands.executeCommand('overleafLocal__PROJECT__.resolve');
+    await vscode.commands.executeCommand(namespace + '.resolve');
   });
 
   register('acceptResolution', async () => {
@@ -206,7 +208,7 @@ function registerConflicts(vscode, context, config, request, output) {
       await saveSession();
       vscode.window.showInformationMessage('合并结果已写回，本地与 Overleaf 已同步。');
     } else vscode.window.showWarningMessage(`未完成同步，草稿已保留：${state.message}`, '重新检查冲突').then(choice => {
-      if (choice) vscode.commands.executeCommand('overleafLocal__PROJECT__.refreshConflict');
+      if (choice) vscode.commands.executeCommand(namespace + '.refreshConflict');
     });
   });
 }

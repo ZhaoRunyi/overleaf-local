@@ -66,7 +66,7 @@ async function request(payload){
   if(payload.op==='inspect-conflict')return {state:'conflict',base,remote,files:['main.tex']};
   published=payload;return {state:'synced',message:'done'};
 }
-registerConflicts(vscode,context,{repo:root,git_config:'/dev/null',files:['main.tex']},request,{appendLine(){}});
+registerConflicts(vscode,context,{id:process.argv[3],repo:root,git_config:'/dev/null',files:['main.tex']},request,{appendLine(){}});
 (async()=>{
   await commands['overleafLocal' + process.argv[3] + '.resolve']();
   assert.equal(errors.length,0);

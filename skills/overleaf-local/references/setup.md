@@ -23,17 +23,17 @@ Repeat with `GIT_TERMINAL_PROMPT=0` to verify noninteractive authentication. Do 
 
 ## 3. Generate, inspect, install
 
-Required host tools: Git, Python 3.10+, `screen`, VS Code remote extension host, and Node.js for optional UI regression checks. Set a unique short project slug and a persistent deployment directory OUTSIDE the manuscript repository. Temporary state remains in `/tmp`, while scripts/config persist.
+Required host tools: Git, Python 3.10+, `screen`, VS Code remote extension host, and Node.js for optional UI regression checks. Set a unique short project slug. The default deployment is `local/ID/` inside the installed skill, outside the manuscript repository. Temporary state remains in `/tmp`; implementation stays in shared `assets/runtime/`. Read [shared-runtime.md](shared-runtime.md) before migrating or upgrading active deployments.
 
 Create an approved JSON file list using the normal patch tool, for example `["main.tex", "references.bib", "figures/pipeline.pdf"]`. Then run:
 
 ```bash
 python /path/to/overleaf-local/scripts/configure.py \
-  --id my-paper --repo /path/to/paper --out /path/to/paper-tools \
+  --id my-paper --repo /path/to/paper \
   --files /tmp/paper-files.json --git-config /path/to/.gitconfig
 ```
 
-The script packages `/tmp/overleaf-local-my-paper.vsix` but does NOT install it, start a service, or modify manuscript files. Inspect `config.json`, `hooks.fragment.json`, and `extension/deployment.json`. Project-specific commands, snapshot schemes, runtime sockets, and extension IDs avoid cross-project collisions. Do not reuse an ID for another active deployment.
+The script packages `/tmp/overleaf-local-my-paper.vsix` but does NOT install it, start a service, or modify manuscript files. Inspect `config.json`, `hooks.fragment.json`, and the lightweight `extension/extension.js` entry point. Project-specific commands, snapshot schemes, runtime sockets, and extension IDs avoid cross-project collisions. Do not reuse an ID for another active deployment.
 
 Install using the remote VS Code window's Extensions → Install from VSIX, or its own remote `code --install-extension /tmp/overleaf-local-my-paper.vsix`. Reload only after saving outstanding edits. Installing with the wrong local/remote CLI targets the wrong extension host. The deployment directory must remain accessible at its generated absolute path; regenerate/repackage before relocating it.
 

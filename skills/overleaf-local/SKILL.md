@@ -5,7 +5,7 @@ description: Set up, reuse, troubleshoot, and verify protected bidirectional syn
 
 # Overleaf Local
 
-Build a project-scoped workflow from the bundled, tested runtime. It includes saved-file synchronization, multi-window editor protection, explicit local/Overleaf conflict choices, edit guards, and optional stable-source wake. Do not migrate a working project merely to install this skill.
+Use one shared runtime in `assets/runtime/`, with project configuration and lightweight launchers in Git-ignored `local/ID/`. Each deployment links to its manuscript and shared runtime; no synchronization folder is required in the paper. It includes saved-file synchronization, multi-window editor protection, explicit local/Overleaf conflict choices, edit guards, and optional stable-source wake. Do not migrate a working project merely to install this skill.
 
 ## Scope and authority
 
@@ -16,7 +16,7 @@ Build a project-scoped workflow from the bundled, tested runtime. It includes sa
 
 ## Routes
 
-1. **Existing deployment:** locate its config, inspect status and pause record, then read [operations.md](references/operations.md). Reuse the installed engine; do not start a second daemon for the same repository.
+1. **Existing deployment:** locate its config, inspect status and pause record, then read [operations.md](references/operations.md). For an explicitly requested migration or shared-code upgrade, also read [shared-runtime.md](references/shared-runtime.md). Do not start a second daemon for the same repository.
 2. **New paper:** read [setup.md](references/setup.md). Reconcile the repository and allowlist first, then generate a project-specific deployment with `scripts/configure.py`. This script only creates tools and packages; it does not clone, stage, commit, push, install extensions, overwrite user hooks, or arm a watcher.
 3. **Conflicts or slow UI:** read [operations.md](references/operations.md). The conflict UI uses local snapshots; fetch only on refresh/final submission. Draft choices never publish without confirmation.
 4. **Codex protection and wake:** read [codex-and-wake.md](references/codex-and-wake.md). Trust hooks through the actual client, verify their invocation, and use the available `codex-wake` skill for a live wait. Polling without successful same-thread delivery is not acceptance.

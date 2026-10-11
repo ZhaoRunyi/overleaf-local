@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 
-home = Path(__file__).resolve().parent
+home = Path(os.environ.get('OVERLEAF_LOCAL_HOME', Path(__file__).resolve().parent))
 config = json.loads((home/'config.json').read_text())
 runtime = Path(config['runtime'])
 runtime.mkdir(mode=0o700, parents=True, exist_ok=True)

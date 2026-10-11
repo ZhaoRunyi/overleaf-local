@@ -15,8 +15,10 @@ Use $skill-installer to install ZhaoRunyi/overleaf-local from path skills/overle
 ```
 
 Restart Codex and invoke `$overleaf-local` for a new or existing paper. The configurator generates a
-project-specific runtime; it does not clone, publish, install a VSIX, overwrite hooks, or choose a
-conflict side without authorization.
+project-specific configuration and lightweight launchers under the installed skill's Git-ignored
+`local/ID/`, linking to one shared runtime and the paper; it does not clone, publish, install a VSIX, overwrite hooks, or choose a
+conflict side without authorization. Preserve `local/` when upgrading the installed skill; pause and
+restart affected daemons and reload editor extensions after testing shared-code changes.
 
 For pixel-level PDF comparison, install the optional Pillow runtime and ensure Poppler is available:
 

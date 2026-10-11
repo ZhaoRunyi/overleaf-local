@@ -2,6 +2,8 @@
 
 ## Automated, isolated checks
 
+Run `python scripts/regression_shared.py` to test two lightweight deployments backed by the same runtime, including the engine, guard and mock-UI suites below. Launchers and fixtures stay in `/tmp`; this does not touch any paper or Overleaf project.
+
 Run `python scripts/regression.py /path/to/generated/deployment` on a disposable generated deployment. It imports that engine and uses local bare Git remotes and an editor adapter in `/tmp`, not Overleaf or the user's paper. It exercises save/push, fetch/apply, nonoverlap merge, conflict retention/confirmation, dirty buffers, missing editor, save and push races, allowlists, offline recovery, binary conflicts, and deletion safety. This is not actual GUI or Internet acceptance.
 
 Run `python3 scripts/regression_guards.py /path/to/generated/deployment` for multi-window veto, stale conflict refresh and quiet-readiness tests. Run `node scripts/regression_ui.js /path/to/generated/deployment PROJECT_ID` for native merge command arguments, draft reuse, guarded whole-file choices and confirmed submission with a mocked VS Code UI. Unix sockets and Node subprocesses may require the host rather than a restricted sandbox. Missing host permissions are not test failures in synchronization logic, but the test remains unexecuted until rerun with those capabilities.
